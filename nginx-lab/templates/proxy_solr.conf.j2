@@ -1,0 +1,7 @@
+server {
+    listen {{ nginx_listen_port }};
+
+    location / {
+        proxy_pass http://{{ haproxy_bind_ip }}:{{ haproxy_bind_port }};
+    }
+}

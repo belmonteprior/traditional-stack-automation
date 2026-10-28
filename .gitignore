@@ -1,0 +1,18 @@
+# Ansible temporales
+*.retry
+.ansible/
+tmp/
+
+# Credenciales y claves (Buenas prácticas)
+*.pem
+*.key
+id_rsa*
+secret*.yml
+secrets/
+
+# Entornos virtuales y cachés
+.venv/
+__pycache__/
+.terraform/
+*.tfstate
+*.tfstate.backup

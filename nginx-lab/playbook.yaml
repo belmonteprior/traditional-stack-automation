@@ -1,0 +1,75 @@
+---
+- hosts: all
+  become: true
+
+  vars_files:
+    - vars/main.yaml
+
+  pre_tasks:
+    - name: Update dnf cache if needed.
+      ansible.builtin.dnf:
+        update_cache: true
+
+  tasks:
+    - name: Install Nginx
+      ansible.builtin.dnf:
+        name: nginx
+        state: present
+
+    - name: Iniciar y habilitar servicio nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Asegurar que firewalld esté instalado
+      ansible.builtin.package:
+        name: firewalld
+        state: present
+
+    - name: Asegurar que firewalld esté iniciado y habilitado en el arranque
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: true
+
+    - name: Permitir trafico HTTP en firewall
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        state: enabled
+        immediate: true
+
+    - name: Permitir trafico HTTPS en firewall
+      ansible.posix.firewalld:
+        service: https
+        permanent: true
+        state: enabled
+        immediate: true
+
+    - name: Desplegar la configuración de Nginx como proxy inverso para Solr
+      ansible.builtin.template:
+        src: /home/vbelmonte/projects/ansible-labs/nginx-lab/templates/proxy_solr.conf.j2
+        dest: /etc/nginx/conf.d/solr.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Recargar Nginx
+
+    - name: 3. Permitir que Nginx conecte con el puerto de red en SELinux
+      ansible.builtin.seboolean:
+        name: httpd_can_network_connect
+        state: yes
+        persistent: yes
+
+    - name: 4. Asegurar que el servicio de Nginx esté activo y habilitado
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Recargar Nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded

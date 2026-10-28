@@ -1,0 +1,6 @@
+---
+nginx_listen_port: 80
+
+# Variables del backend hacia el que Nginx redirige el tráfico (HAProxy)
+haproxy_bind_ip: "192.168.50.11"
+haproxy_bind_port: 8080

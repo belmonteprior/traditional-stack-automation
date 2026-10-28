@@ -1,0 +1,36 @@
+---
+- name: Instalar node exporter en Almalinux
+  hosts: all
+  become: yes
+
+  vars_files:
+    - vars/main.yaml
+
+  pre_tasks:
+    - name: Update dnf cache if needed.
+      ansible.builtin.dnf:
+        update_cache: true
+
+  tasks:
+    - name: Asegurar que el repositorio EPEL esta instalado
+      ansible.builtin.dnf:
+        name: epel-release
+        state: present
+
+    - name: Instalar el paquete node_exporter desde EPEL
+      ansible.builtin.dnf:
+        name: node-exporter
+        state: present
+
+    - name: Habilitar e iniciar el servicio prometheus-node-exporter
+      ansible.builtin.systemd:
+        name: prometheus-node-exporter
+        state: started
+        enabled: true
+
+    - name: Abrir puerto 3000/tcp en firewalld para acceso web a Grafana
+      ansible.builtin.firewalld:
+        port: 3000/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes

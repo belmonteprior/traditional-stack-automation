@@ -1,0 +1,81 @@
+---
+- name: Desplegar Prometheus y Grafana en AlmaLinux
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Asegurar que el usuario actual pertenece al grupo docker
+      ansible.builtin.user:
+        name: "{{ ansible_user | default(ansible_ssh_user, true) }}"
+        groups: docker
+        append: true
+
+    - name: Refrescar la conexion SSH para aplicar los permisos de grupo
+      meta: reset_connection
+
+    - name: Asegurar que el directorio de configuracion existe en remoto
+      ansible.builtin.file:
+        path: /opt/monitoring/config
+        state: directory
+        mode: "0755"
+
+    - name: Asegurar que el directorio de datos existe en remoto
+      ansible.builtin.file:
+        path: /opt/monitoring/data
+        state: directory
+        mode: "0755"
+        owner: "65534"
+        group: "65534"
+
+    - name: Crear directorio de datos para Grafana
+      ansible.builtin.file:
+        path: /opt/monitoring/grafana
+        state: directory
+        mode: "0755"
+        owner: "472"
+        group: "472"
+
+    - name: Copiar el fichero de configuracion de Prometheus al servidor
+      ansible.builtin.copy:
+        src: "{{ inventory_dir }}/monitoring-files/prometheus.yaml"
+        dest: /opt/monitoring/config/prometheus.yaml
+        mode: "0644"
+
+    - name: Comprobar si el contenedor de Prometheus esta en ejecucion
+      ansible.builtin.shell: docker inspect -f '{{ "{{" }} .State.Running {{ "}}" }}' prometheus 2>/dev/null || echo "stopped"
+      register: prometheus_status
+      changed_when: false
+
+    - name: Eliminar contenedor Prometheus previo si requiere actualizacion
+      ansible.builtin.shell: docker rm -f prometheus
+      when: prometheus_status.stdout != "true"
+
+    - name: Arrancar contenedor de Prometheus con docker run
+      ansible.builtin.shell: |
+        docker run -d \
+          --name prometheus \
+          --restart unless-stopped \
+          -v /opt/monitoring/config/prometheus.yaml:/etc/prometheus/prometheus.yaml \
+          -v /opt/monitoring/data:/prometheus \
+          -p 9090:9090 \
+          prom/prometheus
+      when: prometheus_status.stdout != "true"
+
+    - name: Comprobar si el contenedor de Grafana esta en ejecucion
+      ansible.builtin.shell: docker inspect -f '{{ "{{" }} .State.Running {{ "}}" }}' grafana 2>/dev/null || echo "stopped"
+      register: grafana_status
+      changed_when: false
+
+    - name: Eliminar contenedor Grafana previo si requiere actualizacion
+      ansible.builtin.shell: docker rm -f grafana
+      when: grafana_status.stdout != "true"
+
+    - name: Arrancar contenedor de Grafana con docker run
+      ansible.builtin.shell: |
+        docker run -d \
+          --name grafana \
+          --restart unless-stopped \
+          -v /opt/monitoring/grafana:/var/lib/grafana \
+          -p 3000:3000 \
+          grafana/grafana:latest
+      when: grafana_status.stdout != "true"

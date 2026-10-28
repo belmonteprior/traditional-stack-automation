@@ -1,0 +1,54 @@
+---
+- name: Instalar docker Engine en Almalinux
+  hosts: all
+  become: yes
+
+  vars_files:
+    - vars/main.yaml
+
+  pre_tasks:
+    - name: Update dnf cache if needed.
+      ansible.builtin.dnf:
+        update_cache: true
+
+  tasks:
+    - name: Desinstalar versiones antiguas de docker para evitar problemas.
+      ansible.builtin.dnf:
+        name:
+          - docker
+          - docker-client
+          - docker-client-latest
+          - docker-common
+          - docker-latest
+          - docker-latest-logrotate
+          - docker-logrotate
+          - docker-engine
+          - podman
+          - runc
+        state: absent
+
+    - name: Añadir el repositorio oficial de Docker CE para RHEL
+      ansible.builtin.yum_repository:
+        name: docker-ce-stable
+        description: Docker CE Stable - $basearch
+        baseurl: https://download.docker.com/linux/rhel/$releasever/$basearch/stable
+        enabled: 1
+        gpgcheck: 1
+        gpgkey: https://download.docker.com/linux/rhel/gpg
+        state: present
+
+    - name: Instalar Docker Engine, CLI, containerd y plugins oficiales
+      ansible.builtin.dnf:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Habilitar e iniciar el servicio Docker mediante systemd
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes

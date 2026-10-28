@@ -1,0 +1,56 @@
+---
+- hosts: all
+  become: true
+
+  vars_files:
+    - vars/main.yaml
+
+  pre_tasks:
+    - name: Update dnf cache if needed.
+      ansible.builtin.dnf:
+        update_cache: true
+
+  tasks:
+    - name: Añadir IP secundaria a la interfaz eth0 con nmcli
+      ansible.builtin.command:
+        cmd: nmcli connection modify eth0 +ipv4.addresses {{ secondary_ip_cidr }}
+      changed_when: true
+
+    - name: Recargar la conexion eth0 para aplicar cambios de red
+      ansible.builtin.command:
+        cmd: nmcli connection up eth0
+      changed_when: true
+
+    - name: Install Haproxy
+      ansible.builtin.dnf:
+        name: haproxy
+        state: present
+
+    - name: Permitir trafico HTTP en firewall
+      ansible.posix.firewalld:
+        service: http
+        permanent: true
+        state: enabled
+        immediate: true
+
+    - name: Habilitar la booleana de SELinux para permitir conexiones salientes de HAProxy
+      ansible.posix.seboolean:
+        name: haproxy_connect_any
+        state: true
+        persistent: yes
+      notify: Reiniciar haproxy
+
+    - name: Desplegar plantilla de configuracion de HAProxy
+      ansible.builtin.template:
+        src: templates/haproxy.cfg.j2
+        dest: /etc/haproxy/haproxy.cfg
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart haproxy
+
+  handlers:
+    - name: Restart haproxy
+      ansible.builtin.service:
+        name: haproxy
+        state: restarted

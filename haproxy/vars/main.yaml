@@ -1,0 +1,12 @@
+---
+# Red e interfaz eth0
+interface_name: "eth0"
+primary_ip_cidr: "192.168.50.10/24"
+secondary_ip_cidr: "192.168.50.11/24"
+
+# Escucha de HAProxy y destino del backend (Solr)
+haproxy_bind_ip: "192.168.50.11"
+haproxy_bind_port: 8080
+
+solr_backend_host: "127.0.0.1"
+solr_backend_port: 8983

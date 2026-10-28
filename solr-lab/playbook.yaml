@@ -1,0 +1,98 @@
+---
+- hosts: all
+  become: true
+
+  vars_files:
+    - vars/main.yaml
+
+  pre_tasks:
+    - name: Update dnf cache if needed.
+      ansible.builtin.dnf:
+        update_cache: true
+
+  tasks:
+    - name: Install Java
+      ansible.builtin.dnf:
+        name: java-11-openjdk-devel
+        state: present
+
+    - name: Download Solr.
+      get_url:
+        url: "https://archive.apache.org/dist/lucene/solr/{{ solr_version }}/solr-{{ solr_version }}.tgz"
+        dest: "{{ download_dir }}/solr-{{ solr_version }}.tgz"
+        checksum: "{{ solr_checksum }}"
+
+    - name: Ensure tar is installed
+      ansible.builtin.dnf:
+        name: tar
+        state: present
+      become: true
+
+    - name: Expand Solr.
+      unarchive:
+        src: "{{ download_dir }}/solr-{{ solr_version }}.tgz"
+        dest: "{{ download_dir }}"
+        remote_src: true
+        creates: "{{ download_dir }}/solr-{{ solr_version }}/README.txt"
+
+    - name: Ensure solr system user exists
+      ansible.builtin.user:
+        name: solr
+        system: yes
+        create_home: no
+        shell: /sbin/nologin
+      become: true
+
+    - name: Run Solr installation script.
+      command: >
+        {{ download_dir }}/solr-{{ solr_version }}/bin/install_solr_service.sh
+        {{ download_dir }}/solr-{{ solr_version }}.tgz
+        -i /opt
+        -d /var/solr
+        -u solr
+        -s solr
+        -p 8983
+        creates={{ solr_dir }}/bin/solr
+
+    - name: Create Solr systemd service unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/solr.service
+        content: |
+          [Unit]
+          Description=Apache Solr
+          After=network.target
+
+          [Service]
+          Type=forking
+          User=solr
+          Environment=SOLR_INCLUDE=/etc/default/solr.in.sh
+          ExecStart=/opt/solr/bin/solr start
+          ExecStop=/opt/solr/bin/solr stop
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+      become: true
+
+    - name: Ensure solr is started and enabled on boot
+      ansible.builtin.systemd:
+        name: solr
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      become: true
+
+    - name: Ensure firewalld is running and enabled
+      ansible.builtin.systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+      become: true
+
+    - name: Open Solr port 8983 in firewall
+      ansible.posix.firewalld:
+        port: 8983/tcp
+        permanent: yes
+        state: enabled
+        immediate: yes
+      become: true
